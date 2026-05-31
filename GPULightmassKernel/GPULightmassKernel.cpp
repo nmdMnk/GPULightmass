@@ -64,7 +64,7 @@ void LOG(const char* format, ...)
 	char dest[1024 * 16];
 	va_list argptr;
 	va_start(argptr, format);
-	vsprintf(dest, format, argptr);
+	vsprintf_s(dest, sizeof(dest), format, argptr);
 	GLogHandler((L"GPULightmass Kernel: " + RStringUtils::Widen(dest)).c_str());
 	va_end(argptr);
 }
@@ -109,7 +109,6 @@ GPULIGHTMASSKERNEL_API void ImportAggregateMesh(
 {
 	LOG("Importing mesh: %d vertices, %d triangles", NumVertices, NumTriangles);
 
-	BVH2Node* root;
 	BVH8Node* root8;
 
 	{
@@ -182,7 +181,7 @@ GPULIGHTMASSKERNEL_API void ImportMaterialMaps(
 		cudaArray_t array;
 		cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
 		cudaCheck(cudaMallocArray(&array, &channelDesc, SizeXY, SizeXY));
-		cudaCheck(cudaMemcpyToArray(array, 0, 0, MapData[i], SizeXY * SizeXY * sizeof(float), cudaMemcpyHostToDevice));
+		cudaCheck(cudaMemcpy2DToArray(array, 0, 0, MapData[i], static_cast<size_t>(SizeXY) * sizeof(float), static_cast<size_t>(SizeXY) * sizeof(float), SizeXY, cudaMemcpyHostToDevice));
 
 		cudaResourceDesc resDesc;
 		memset(&resDesc, 0, sizeof(resDesc));
@@ -202,7 +201,7 @@ GPULIGHTMASSKERNEL_API void ImportMaterialMaps(
 
 	LOG("%d masked collision maps imported", NumMaterials);
 
-	rtBindMaskedCollisionMaps(textureMaps.size(), textureMaps.data());
+	rtBindMaskedCollisionMaps(static_cast<int>(textureMaps.size()), textureMaps.data());
 }
 
 GPULIGHTMASSKERNEL_API void ImportSurfaceCache(

@@ -1,4 +1,4 @@
-Luoshuang's GPULightmass for UE4
+Luoshuang's GPULightmass for UE
 =============
 
 Build

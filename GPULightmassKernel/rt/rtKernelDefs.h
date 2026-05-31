@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cuda_runtime.h>
-#include <device_functions.h>
 #include <device_launch_parameters.h>
 #include <cuda_profiler_api.h>
 #include <curand_kernel.h>

@@ -38,10 +38,6 @@ __global__ void RadiosityIncomingRadianceKernel(
 		return;
 
 	int TargetTexelLocation = InTaskBuffer->Buffer[blockIdx.x];
-	int TexelX = TargetTexelLocation % SizeX;
-	int TexelY = TargetTexelLocation / SizeX;
-	float TexelU = (TexelX + 0.5f) / SizeX;
-	float TexelV = (TexelY + 0.5f) / SizeY;
 
 	if (threadIdx.x == 0 && threadIdx.y == 0)
 		atomicAdd(&MappedTexelCounter, 1);
@@ -82,12 +78,12 @@ __global__ void RadiosityIncomingRadianceKernel(
 	const int NumRadiositySamples[] =
 	{
 		NumRadiositySampleFirstPass,
-		NumRadiositySampleFirstPass * 0.5f,
-		NumRadiositySampleFirstPass * 0.75f,
-		NumRadiositySampleFirstPass * 0.75f,
-		NumRadiositySampleFirstPass * 0.5f * 0.5f,
-		NumRadiositySampleFirstPass * 0.5f * 0.5f * 0.75f,
-		NumRadiositySampleFirstPass * 0.5f * 0.5f * 0.75f * 0.75f
+		NumRadiositySampleFirstPass / 2,
+		(NumRadiositySampleFirstPass * 3) / 4,
+		(NumRadiositySampleFirstPass * 3) / 4,
+		NumRadiositySampleFirstPass / 4,
+		(NumRadiositySampleFirstPass * 3) / 16,
+		(NumRadiositySampleFirstPass * 9) / 64
 	};
 
 	const int NumThetaSteps = NumRadiositySamples[min(RadiosityPassIndex, 4)];
@@ -401,8 +397,6 @@ __device__ void TryGetColorAndWorldPosition(
 	{
 		int TargetTexelLocation = Y * SizeX + X;
 		OutColor = RadiositySurfaceCaches[SurfaceCacheIndex].cudaRadiositySurfaceCacheUnderlyingBuffer[RadiosityPassIndex % 2][TargetTexelLocation];
-		float u = (X + 0.5f) / SizeX;
-		float v = (Y + 0.5f) / SizeY;
 		OutWorldPosition = make_float3(WorldPositionMap[TargetTexelLocation]);
 	}
 	else {

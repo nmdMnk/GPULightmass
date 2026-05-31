@@ -85,16 +85,6 @@ __global__ void VolumeSampleListIndirectLightingKernel(
 #endif
 #endif
 
-	float Rand1 = 0.0f;
-	float Rand2 = 0.0f;
-	float Rand3 = 0.0f;
-
-#if USE_JITTERED_SAMPLING
-	Rand1 = 0.5f - curand_uniform(&randState);
-	Rand2 = 0.5f - curand_uniform(&randState);
-	Rand3 = 0.5f - curand_uniform(&randState);
-#endif
-
 	float3 WorldPosition = WorldPositions[TargetTexelLocation];
 	float3 WorldNormal = make_float3(0.0f, 0.0f, Direction);
 

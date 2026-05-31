@@ -8,6 +8,7 @@
 #include <tbb/parallel_for.h>
 #undef NDEBUG
 #include <cassert>
+#include <cstdio>
 
 #pragma comment(lib, "embree_avx.lib")
 #pragma comment(lib, "embree_avx2.lib")
@@ -33,7 +34,7 @@ void SetNodeChildren(void* nodePtr, void** children, unsigned int childCount, vo
 {
 	assert(childCount > 0);
 	BVHNNode<N>* node = (BVHNNode<N>*)nodePtr;
-	for (int i = 0; i < childCount; i++)
+	for (unsigned int i = 0; i < childCount; i++)
 		node->Children[i] = ((BVHNNode<N>**)children)[i];
 	node->ChildCount = childCount;
 }
@@ -43,7 +44,7 @@ template <int N>
 void SetNodeBounds(void* nodePtr, const struct RTCBounds** bounds, unsigned int childCount, void* userPtr)
 {
 	BVHNNode<N>* node = (BVHNNode<N>*)nodePtr;
-	for (int i = 0; i < childCount; i++)
+	for (unsigned int i = 0; i < childCount; i++)
 	{
 		node->ChildrenMin[i].x = bounds[i]->lower_x;
 		node->ChildrenMin[i].y = bounds[i]->lower_y;
@@ -61,9 +62,9 @@ void* CreateLeaf(RTCThreadLocalAllocator allocator, const struct RTCBuildPrimiti
 	assert(primitiveCount > 0);
 	BVHNNode<N>* newNode = new (rtcThreadLocalAlloc(allocator, sizeof(BVHNNode<N>), 16)) BVHNNode<N>;
 	newNode->LeafPrimitiveRefs = new (rtcThreadLocalAlloc(allocator, sizeof(int) * primitiveCount, sizeof(int))) int[primitiveCount]();
-	for (int i = 0; i < primitiveCount; i++)
+	for (size_t i = 0; i < primitiveCount; i++)
 		newNode->LeafPrimitiveRefs[i] = primitives[i].primID;
-	newNode->LeafPrimitiveCount = primitiveCount;
+	newNode->LeafPrimitiveCount = static_cast<int>(primitiveCount);
 	return newNode;
 }
 
@@ -265,12 +266,12 @@ bool ProgressMonitor(void* ptr, double n)
 {
 	char progressTextBuffer[256];
 	char duplicateTextBuffer[256];
-	sprintf(progressTextBuffer, "Building BVH %.0lf%%", n * 100);
-	sprintf(duplicateTextBuffer, "");
+	sprintf_s(progressTextBuffer, "Building BVH %.0lf%%", n * 100.0);
+	duplicateTextBuffer[0] = '\0';
 
 	ReportProgress(
 		progressTextBuffer,
-		n * 100,
+		static_cast<int>(n * 100.0),
 		duplicateTextBuffer,
 		0,
 		false
@@ -445,7 +446,7 @@ void EmbreeBVHBuilder::ConvertToCUDABVH2(
 		{
 			assert(node->Children[0] != nullptr && node->Children[1] != nullptr);
 
-			int currentNodeAddr = OutNodeData.size();
+			int currentNodeAddr = static_cast<int>(OutNodeData.size());
 			if (parentNodeAddr >= 0)
 			{
 				if (stackNodeIdxInParent[stackPtr] == 0)
@@ -475,7 +476,7 @@ void EmbreeBVHBuilder::ConvertToCUDABVH2(
 		{
 			assert(node->Children[0] == nullptr && node->Children[1] == nullptr);
 			// Leaf node
-			int currentNodeAddr = OutWoopifiedTriangles.size();
+			int currentNodeAddr = static_cast<int>(OutWoopifiedTriangles.size());
 			currentNodeAddr = ~currentNodeAddr;
 
 			if (parentNodeAddr >= 0)

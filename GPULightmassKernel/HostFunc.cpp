@@ -86,7 +86,7 @@ void BindBVH2Data(
 	cudaCheck(cudaMalloc((void**)&cudaMappingFromTriangleAddressToIndex, TriangleIndices.size() * sizeof(int)));
 	cudaCheck(cudaMemcpy(cudaMappingFromTriangleAddressToIndex, TriangleIndices.data(), TriangleIndices.size() * sizeof(int), cudaMemcpyHostToDevice));
 
-	rtBindBVH2Data(cudaBVHNodes, cudaTriangleWoopCoordinates, cudaMappingFromTriangleAddressToIndex, NodeData.size(), WoopifiedTriangles.size(), TriangleIndices.size());
+	rtBindBVH2Data(cudaBVHNodes, cudaTriangleWoopCoordinates, cudaMappingFromTriangleAddressToIndex, static_cast<unsigned int>(NodeData.size()), static_cast<unsigned int>(WoopifiedTriangles.size()), static_cast<unsigned int>(TriangleIndices.size()));
 }
 
 void BindBVH8Data(
@@ -107,7 +107,7 @@ void BindBVH8Data(
 	cudaCheck(cudaMalloc((void**)&cudaMappingFromTriangleAddressToIndex, TriangleIndices.size() * sizeof(int)));
 	cudaCheck(cudaMemcpy(cudaMappingFromTriangleAddressToIndex, TriangleIndices.data(), TriangleIndices.size() * sizeof(int), cudaMemcpyHostToDevice));
 
-	rtBindBVH8Data(cudaBVHNodes, cudaTriangleWoopCoordinates, cudaMappingFromTriangleAddressToIndex, NodeData.size(), WoopifiedTriangles.size(), TriangleIndices.size());
+	rtBindBVH8Data(cudaBVHNodes, cudaTriangleWoopCoordinates, cudaMappingFromTriangleAddressToIndex, static_cast<unsigned int>(NodeData.size()), static_cast<unsigned int>(WoopifiedTriangles.size()), static_cast<unsigned int>(TriangleIndices.size()));
 }
 
 void BindParameterizationData(
@@ -190,7 +190,7 @@ bool BindBVHDataFromFile(std::string fileName)
 {
 	FILE* fp;
 
-	fp = fopen(fileName.c_str(), "rb");
+	fopen_s(&fp, fileName.c_str(), "rb");
 
 	if (fp != nullptr)
 	{
@@ -242,7 +242,9 @@ bool BindBVHDataFromFile(std::string fileName)
 void SaveSampleDataToFile(const float4* SampleWorldPositions, const float4 * SampleWorldNormals, const float * TexelRadius, int SizeX, int SizeY, std::string fileName)
 {
 	FILE* fp;
-	fp = fopen(fileName.c_str(), "wb");
+	fopen_s(&fp, fileName.c_str(), "wb");
+	if (fp == nullptr)
+		return;
 	fwrite(&SizeX, sizeof(SizeX), 1, fp);
 	fwrite(&SizeY, sizeof(SizeY), 1, fp);
 	fwrite(SampleWorldPositions, sizeof(float4), SizeX * SizeY, fp);
@@ -299,7 +301,7 @@ void GenerateSDF(Vec3f BoundingBoxMin, Vec3f BoundingBoxMax, Vec3i VolumeDimensi
 
 	cudaCheck(cudaMalloc((void**)&cudaOutBuffer, VolumeDimension.x * VolumeDimension.y * 8 * sizeof(float)));
 
-	int gridSizeZ = ceilf((float)VolumeDimension.z / 8);
+	int gridSizeZ = (VolumeDimension.z + 7) / 8;
 
 	for (int ZSlice8 = 0; ZSlice8 < gridSizeZ; ZSlice8++)
 	{

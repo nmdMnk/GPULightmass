@@ -529,11 +529,11 @@ __host__ float rtTimedLaunch(float& OutMRaysPerSecond, int NumSamples)
 	accumulatedGPUTime += elapsedTime;
 	totalRayTraced += numTotalRay;
 
-	OutMRaysPerSecond = totalRayTraced / 1000000.0 / (accumulatedGPUTime / 1000.0);
-	const float CurrentMRaysPerSecond = numTotalRay / 1000000.0 / (elapsedTime / 1000.0);
+	OutMRaysPerSecond = static_cast<float>(totalRayTraced / 1000000.0 / (accumulatedGPUTime / 1000.0));
+	const float CurrentMRaysPerSecond = static_cast<float>(numTotalRay / 1000000.0 / (elapsedTime / 1000.0));
 
-	LastRayTracingPerformance = numTotalRay / 1000000.0 / (elapsedTime / 1000.0);
-	OverallRayTracingPerformance = totalRayTraced / 1000000.0 / (accumulatedGPUTime / 1000.0);
+	LastRayTracingPerformance = static_cast<float>(numTotalRay / 1000000.0 / (elapsedTime / 1000.0));
+	OverallRayTracingPerformance = static_cast<float>(totalRayTraced / 1000000.0 / (accumulatedGPUTime / 1000.0));
 
 	GPULightmass::LOG("GPU accumulated time: %.3lfs (Current: %.3fMS), %.2lfMRays/s (Current: %.2lfMRays/s), %d texels, %dx%d texture", accumulatedGPUTime / 1000.0, elapsedTime, OutMRaysPerSecond, CurrentMRaysPerSecond, Counter, LaunchSizeX, LaunchSizeY);
 
@@ -550,9 +550,6 @@ __host__ void cudaGenerateSignedDistanceFieldVolumeData(Vec3f BoundingBoxMin, Ve
 	int gridSizeX = (int)ceilf((float)VolumeDimension.x / 8);
 	int gridSizeY = (int)ceilf((float)VolumeDimension.y / 8);
 	dim3 grid(gridSizeX, gridSizeY, 1);
-
-	const Vec3f VolumeSize = BoundingBoxMax - BoundingBoxMin;
-	const Vec3f DistanceFieldVoxelSize = VolumeSize / Vec3f(VolumeDimension.x, VolumeDimension.y, VolumeDimension.z);
 
 	GenerateSignedDistanceFieldVolumeDataKernel << < grid, block >> > (BoundingBoxMin, BoundingBoxMax, VolumeDimension, OutBuffer, ZSliceIndex);
 

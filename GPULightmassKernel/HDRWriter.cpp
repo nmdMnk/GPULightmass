@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <string>
 #include "linear_math.h"
 
@@ -13,7 +14,7 @@ void float2rgbe(unsigned char rgbe[4], float red, float green, float blue)
 		rgbe[0] = rgbe[1] = rgbe[2] = rgbe[3] = 0;
 	}
 	else {
-		v = frexp(v, &e) * 256.0 / v;
+		v = static_cast<float>(frexp(v, &e) * 256.0 / v);
 		rgbe[0] = (unsigned char)(red * v);
 		rgbe[1] = (unsigned char)(green * v);
 		rgbe[2] = (unsigned char)(blue * v);
@@ -23,7 +24,9 @@ void float2rgbe(unsigned char rgbe[4], float red, float green, float blue)
 
 void WriteHDR(std::string fileName, const float4* buffer, int Width, int Height)
 {
-	FILE* outputFile = fopen(fileName.c_str(), "wb");
+	FILE* outputFile = nullptr;
+	if (fopen_s(&outputFile, fileName.c_str(), "wb") != 0 || !outputFile)
+		return;
 
 	fprintf(outputFile, "#?RADIANCE\n"); 
 	fprintf(outputFile, "FORMAT=32-bit_rle_rgbe\n\n");
@@ -41,7 +44,9 @@ void WriteHDR(std::string fileName, const float4* buffer, int Width, int Height)
 
 void WriteNormal(std::string fileName, const float4* buffer, int Width, int Height)
 {
-	FILE* outputFile = fopen(fileName.c_str(), "wb");
+	FILE* outputFile = nullptr;
+	if (fopen_s(&outputFile, fileName.c_str(), "wb") != 0 || !outputFile)
+		return;
 
 	fprintf(outputFile, "#?RADIANCE\n");
 	fprintf(outputFile, "FORMAT=32-bit_rle_rgbe\n\n");

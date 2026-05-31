@@ -22,7 +22,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.4.props" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.9.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -49,7 +49,8 @@
       <PreprocessorDefinitions>TASKING_TBB;WIN32;WIN64;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <OpenMPSupport>true</OpenMPSupport>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>.\;D:\embree\include;C:\Program Files (x86)\Intel\oneAPI\tbb\2021.12\include;%(AdditionalIncludeDirectories);$(CudaToolkitIncludeDir)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>.\;$(SolutionDir)External\embree\include;$(SolutionDir)External\oneapi-tbb-2023.0.0\include;%(AdditionalIncludeDirectories);$(CudaToolkitIncludeDir)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -57,18 +58,21 @@
       <OptimizeReferences>true</OptimizeReferences>
       <SubSystem>Console</SubSystem>
       <AdditionalDependencies>tbb.lib;cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>D:\embree\Release;C:\Program Files (x86)\Intel\oneAPI\tbb\2021.12\lib;%(AdditionalLibraryDirectories);$(CudaToolkitLibDir)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)External\embree\lib;$(SolutionDir)External\oneapi-tbb-2023.0.0\lib\intel64\vc14;%(AdditionalLibraryDirectories);$(CudaToolkitLibDir)</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>mkdir D:\UE5\Engine\Source\ThirdParty\GPULightmass\Win64\include\
-mkdir D:\UE5\Engine\Source\ThirdParty\GPULightmass\Win64\lib\
-copy /Y "$(ProjectDir)GPULightmassKernel.h" "D:\UE5\Engine\Source\ThirdParty\GPULightmass\Win64\include\GPULightmassKernel.h"
-copy /Y "$(TargetDir)$(ProjectName).lib" "D:\UE5\Engine\Source\ThirdParty\GPULightmass\Win64\lib\$(ProjectName).lib"
-copy /Y "$(TargetDir)$(ProjectName).dll" "D:\UE5\Engine\Source\ThirdParty\GPULightmass\Win64\lib\$(ProjectName).dll"
-copy /Y "$(TargetDir)$(ProjectName).dll" "D:\UE5\Engine\Binaries\Win64\$(ProjectName).dll"</Command>
+      <Command>if not exist "D:\temp\UE5\Engine\Source\ThirdParty\GPULightmass\Win64\include\" mkdir "D:\temp\UE5\Engine\Source\ThirdParty\GPULightmass\Win64\include\"
+if not exist "D:\temp\UE5\Engine\Source\ThirdParty\GPULightmass\Win64\lib\" mkdir "D:\temp\UE5\Engine\Source\ThirdParty\GPULightmass\Win64\lib\"
+if not exist "D:\temp\UE5\Engine\Binaries\Win64\" mkdir "D:\temp\UE5\Engine\Binaries\Win64\"
+copy /Y "$(ProjectDir)GPULightmassKernel.h" "D:\temp\UE5\Engine\Source\ThirdParty\GPULightmass\Win64\include\GPULightmassKernel.h"
+copy /Y "$(TargetDir)$(ProjectName).lib" "D:\temp\UE5\Engine\Source\ThirdParty\GPULightmass\Win64\lib\$(ProjectName).lib"
+copy /Y "$(TargetDir)$(ProjectName).dll" "D:\temp\UE5\Engine\Source\ThirdParty\GPULightmass\Win64\lib\$(ProjectName).dll"
+copy /Y "$(TargetDir)$(ProjectName).dll" "D:\temp\UE5\Engine\Binaries\Win64\$(ProjectName).dll"
+copy /Y "$(SolutionDir)External\oneapi-tbb-2023.0.0\redist\intel64\vc14\tbb12.dll" "D:\temp\UE5\Engine\Binaries\Win64\tbb12.dll"</Command>
     </PostBuildEvent>
     <CudaCompile>
-      <AdditionalCompilerOptions>/wd4819 /wd4267 /wd4996</AdditionalCompilerOptions>
+      <AdditionalCompilerOptions>/wd4819 /wd4267 /wd4996 /Zc:preprocessor</AdditionalCompilerOptions>
+      <AdditionalOptions>-std=c++17 -Wno-deprecated-gpu-targets</AdditionalOptions>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <FastMath>true</FastMath>
     </CudaCompile>
@@ -117,6 +121,6 @@ copy /Y "$(TargetDir)$(ProjectName).dll" "D:\UE5\Engine\Binaries\Win64\$(Project
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.4.targets" />
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 12.9.targets" />
   </ImportGroup>
 </Project>
