@@ -229,6 +229,17 @@ GPULIGHTMASSKERNEL_API void SetTotalTexelsForProgressReport(
 	SetTotalTexels(NumTotalTexels);
 }
 
+GPULIGHTMASSKERNEL_API void ReportProgressStatus(
+	const char* CurrentText,
+	int CurrentValue,
+	const char* OverallText,
+	int OverallValue,
+	bool IgnoreReportInterval
+)
+{
+	::ReportProgress(CurrentText, CurrentValue, OverallText, OverallValue, IgnoreReportInterval);
+}
+
 GPULIGHTMASSKERNEL_API void SetGlobalSamplingParameters(
 	float FireflyClampingThreshold
 )

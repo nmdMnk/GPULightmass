@@ -134,6 +134,14 @@ GPULIGHTMASSKERNEL_API void SetTotalTexelsForProgressReport(
 	const size_t NumTotalTexels
 );
 
+GPULIGHTMASSKERNEL_API void ReportProgressStatus(
+	const char* CurrentText,
+	int CurrentValue,
+	const char* OverallText,
+	int OverallValue,
+	bool IgnoreReportInterval
+);
+
 GPULIGHTMASSKERNEL_API void CalculateIndirectLightingTextureMapping(
 	const size_t NumTexelsInCurrentBatch,
 	const int CachedSizeX,
