@@ -541,6 +541,10 @@ void EmbreeBVHBuilder::ConvertToCUDABVH8(
 	int stackNodeAddr[256];
 	int stackPtr = 0;
 
+	OutNodeData.reserve(NumTriangles * 5 / 2);
+	OutWoopifiedTriangles.reserve(NumTriangles * 3);
+	OutTriangleIndices.reserve(NumTriangles * 3);
+
 	stackNodePtr[stackPtr] = root;
 	stackNodeAddr[stackPtr] = 0;
 	stackPtr++;
@@ -668,11 +672,15 @@ void EmbreeBVHBuilder::ConvertToCUDABVH8(
 		}
 
 		// Calculate quantization parameters for each axis respectively
-		const float Nq = 8;
+		const float QuantizedMax = 255.0f;
 		char3 e; // implicit quantization
-		e.x = (char)ceilf(log2f((nodeHi.x - nodeLo.x) / (powf(2, Nq) - 1)));
-		e.y = (char)ceilf(log2f((nodeHi.y - nodeLo.y) / (powf(2, Nq) - 1)));
-		e.z = (char)ceilf(log2f((nodeHi.z - nodeLo.z) / (powf(2, Nq) - 1)));
+		e.x = (char)ceilf(log2f((nodeHi.x - nodeLo.x) / QuantizedMax));
+		e.y = (char)ceilf(log2f((nodeHi.y - nodeLo.y) / QuantizedMax));
+		e.z = (char)ceilf(log2f((nodeHi.z - nodeLo.z) / QuantizedMax));
+
+		const float invQuantScaleX = 1.0f / powf(2.0f, e.x);
+		const float invQuantScaleY = 1.0f / powf(2.0f, e.y);
+		const float invQuantScaleZ = 1.0f / powf(2.0f, e.z);
 
 		// Encode output
 		int internalChildCount = 0;
@@ -689,12 +697,12 @@ void EmbreeBVHBuilder::ConvertToCUDABVH8(
 
 			int3 qlo, qhi;
 
-			qlo.x = (int)floorf((node->ChildrenMin[childIndex].x - nodeLo.x) / powf(2, e.x));
-			qlo.y = (int)floorf((node->ChildrenMin[childIndex].y - nodeLo.y) / powf(2, e.y));
-			qlo.z = (int)floorf((node->ChildrenMin[childIndex].z - nodeLo.z) / powf(2, e.z));
-			qhi.x = (int)ceilf((node->ChildrenMax[childIndex].x - nodeLo.x) / powf(2, e.x));
-			qhi.y = (int)ceilf((node->ChildrenMax[childIndex].y - nodeLo.y) / powf(2, e.y));
-			qhi.z = (int)ceilf((node->ChildrenMax[childIndex].z - nodeLo.z) / powf(2, e.z));
+			qlo.x = (int)floorf((node->ChildrenMin[childIndex].x - nodeLo.x) * invQuantScaleX);
+			qlo.y = (int)floorf((node->ChildrenMin[childIndex].y - nodeLo.y) * invQuantScaleY);
+			qlo.z = (int)floorf((node->ChildrenMin[childIndex].z - nodeLo.z) * invQuantScaleZ);
+			qhi.x = (int)ceilf((node->ChildrenMax[childIndex].x - nodeLo.x) * invQuantScaleX);
+			qhi.y = (int)ceilf((node->ChildrenMax[childIndex].y - nodeLo.y) * invQuantScaleY);
+			qhi.z = (int)ceilf((node->ChildrenMax[childIndex].z - nodeLo.z) * invQuantScaleZ);
 
 			unsigned char* const childBoundsBaseAddr = (unsigned char*)&OutNodeData[currentNodeAddr + 2];
 			childBoundsBaseAddr[childIndex + 0] = qlo.x;

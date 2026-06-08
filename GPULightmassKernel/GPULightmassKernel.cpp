@@ -279,28 +279,34 @@ GPULIGHTMASSKERNEL_API void ImportSkyLightCubemap(
 	std::vector<float4> LowerHemisphereCubemapWithBoundaryCheck(LowerHemisphereCubemap, LowerHemisphereCubemap + NumThetaSteps * NumPhiSteps);
 	std::vector<LuminanceSortingEntry> UpperHemisphereSortingEntries;
 	std::vector<LuminanceSortingEntry> LowerHemisphereSortingEntries;
+	UpperHemisphereSortingEntries.reserve(NumThetaSteps * NumPhiSteps);
+	LowerHemisphereSortingEntries.reserve(NumThetaSteps * NumPhiSteps);
 
 	for (int i = 0; i < NumThetaSteps * NumPhiSteps; i++)
 	{
-		UpperHemisphereSortingEntries.push_back(LuminanceSortingEntry { getLuminance(make_float3(UpperHemisphereCubemapWithBoundaryCheck.at(i))), i });
-		LowerHemisphereSortingEntries.push_back(LuminanceSortingEntry { getLuminance(make_float3(LowerHemisphereCubemapWithBoundaryCheck.at(i))), i });
+		UpperHemisphereSortingEntries.push_back(LuminanceSortingEntry { getLuminance(make_float3(UpperHemisphereCubemapWithBoundaryCheck[i])), i });
+		LowerHemisphereSortingEntries.push_back(LuminanceSortingEntry { getLuminance(make_float3(LowerHemisphereCubemapWithBoundaryCheck[i])), i });
 	}
 
-	std::sort(UpperHemisphereSortingEntries.begin(), UpperHemisphereSortingEntries.end(), [](const LuminanceSortingEntry& a, const LuminanceSortingEntry& b) { return a.Luminance > b.Luminance; });
-	std::sort(LowerHemisphereSortingEntries.begin(), LowerHemisphereSortingEntries.end(), [](const LuminanceSortingEntry& a, const LuminanceSortingEntry& b) { return a.Luminance > b.Luminance; });
+	std::partial_sort(UpperHemisphereSortingEntries.begin(), UpperHemisphereSortingEntries.begin() + 16, UpperHemisphereSortingEntries.end(), [](const LuminanceSortingEntry& a, const LuminanceSortingEntry& b) { return a.Luminance > b.Luminance; });
+	std::partial_sort(LowerHemisphereSortingEntries.begin(), LowerHemisphereSortingEntries.begin() + 16, LowerHemisphereSortingEntries.end(), [](const LuminanceSortingEntry& a, const LuminanceSortingEntry& b) { return a.Luminance > b.Luminance; });
 
 	std::vector<int> UpperHemisphereImportantDirections;
 	std::vector<int> LowerHemisphereImportantDirections;
 	std::vector<float4> UpperHemisphereImportantColor;
 	std::vector<float4> LowerHemisphereImportantColor;
+	UpperHemisphereImportantDirections.reserve(16);
+	LowerHemisphereImportantDirections.reserve(16);
+	UpperHemisphereImportantColor.reserve(16);
+	LowerHemisphereImportantColor.reserve(16);
 
 	for (int i = 0; i < 16; i++)
 	{
 		UpperHemisphereImportantDirections.push_back(UpperHemisphereSortingEntries[i].LinearIndex);
-		UpperHemisphereImportantColor.push_back(UpperHemisphereCubemapWithBoundaryCheck.at(UpperHemisphereSortingEntries[i].LinearIndex));
+		UpperHemisphereImportantColor.push_back(UpperHemisphereCubemapWithBoundaryCheck[UpperHemisphereSortingEntries[i].LinearIndex]);
 
 		LowerHemisphereImportantDirections.push_back(LowerHemisphereSortingEntries[i].LinearIndex);
-		LowerHemisphereImportantColor.push_back(LowerHemisphereCubemapWithBoundaryCheck.at(LowerHemisphereSortingEntries[i].LinearIndex));
+		LowerHemisphereImportantColor.push_back(LowerHemisphereCubemapWithBoundaryCheck[LowerHemisphereSortingEntries[i].LinearIndex]);
 	}
 
 #if 0

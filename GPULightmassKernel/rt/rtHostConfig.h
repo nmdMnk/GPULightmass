@@ -1,3 +1,74 @@
+#include <thrust/device_ptr.h>
+#include <thrust/execution_policy.h>
+#include <thrust/sort.h>
+
+struct FinalGatherWorkspace
+{
+	MortonHash6* cudaMortonHashes = nullptr;
+	size_t MortonHashBytes = 0;
+
+	float4* cudaBucketRadiance = nullptr;
+	size_t BucketRadianceBytes = 0;
+
+	int* cudaBucketSampleRejected = nullptr;
+	size_t BucketSampleRejectedBytes = 0;
+
+	float* cudaDownsampledBucketImportance = nullptr;
+	size_t DownsampledBucketImportanceBytes = 0;
+
+	int* cudaBucketRayStartOffsetInTexel = nullptr;
+	size_t BucketRayStartOffsetInTexelBytes = 0;
+
+	int* cudaTexelToRayIDMap = nullptr;
+	size_t TexelToRayIDMapBytes = 0;
+
+	void* cudaRayBuffer = nullptr;
+	size_t RayBufferBytes = 0;
+
+	void* cudaRayStartInfoBuffer = nullptr;
+	size_t RayStartInfoBufferBytes = 0;
+
+	void* cudaRayHitResultBuffer = nullptr;
+	size_t RayHitResultBufferBytes = 0;
+
+	~FinalGatherWorkspace()
+	{
+		if (cudaMortonHashes != nullptr) cudaFree(cudaMortonHashes);
+		if (cudaBucketRadiance != nullptr) cudaFree(cudaBucketRadiance);
+		if (cudaBucketSampleRejected != nullptr) cudaFree(cudaBucketSampleRejected);
+		if (cudaDownsampledBucketImportance != nullptr) cudaFree(cudaDownsampledBucketImportance);
+		if (cudaBucketRayStartOffsetInTexel != nullptr) cudaFree(cudaBucketRayStartOffsetInTexel);
+		if (cudaTexelToRayIDMap != nullptr) cudaFree(cudaTexelToRayIDMap);
+		if (cudaRayBuffer != nullptr) cudaFree(cudaRayBuffer);
+		if (cudaRayStartInfoBuffer != nullptr) cudaFree(cudaRayStartInfoBuffer);
+		if (cudaRayHitResultBuffer != nullptr) cudaFree(cudaRayHitResultBuffer);
+	}
+};
+
+__host__ void EnsureCudaBuffer(void*& Buffer, size_t& CapacityBytes, size_t RequiredBytes)
+{
+	if (CapacityBytes >= RequiredBytes)
+	{
+		return;
+	}
+
+	if (Buffer != nullptr)
+	{
+		cudaCheck(cudaFree(Buffer));
+	}
+
+	cudaCheck(cudaMalloc(&Buffer, RequiredBytes));
+	CapacityBytes = RequiredBytes;
+}
+
+template <typename T>
+__host__ void EnsureCudaBuffer(T*& Buffer, size_t& CapacityBytes, size_t RequiredBytes)
+{
+	void* UntypedBuffer = Buffer;
+	EnsureCudaBuffer(UntypedBuffer, CapacityBytes, RequiredBytes);
+	Buffer = static_cast<T*>(UntypedBuffer);
+}
+
 __host__ void rtBindBVH2Data(
 	const float4* InBVHTreeNodes,
 	const float4* InTriangleWoopCoordinates,
@@ -115,8 +186,8 @@ __host__ void rtBindMaskedCollisionMaps(
 )
 {
 	cudaTextureObject_t* cudaMaps;
-	cudaCheck(cudaMalloc(&cudaMaps, NumMaps * sizeof(cudaTextureObject_t*)));
-	cudaCheck(cudaMemcpy(cudaMaps, InMaps, NumMaps * sizeof(cudaTextureObject_t*), cudaMemcpyHostToDevice));
+	cudaCheck(cudaMalloc(&cudaMaps, NumMaps * sizeof(cudaTextureObject_t)));
+	cudaCheck(cudaMemcpy(cudaMaps, InMaps, NumMaps * sizeof(cudaTextureObject_t), cudaMemcpyHostToDevice));
 	cudaCheck(cudaMemcpyToSymbol(MaskedCollisionMaps, &cudaMaps, 1 * sizeof(cudaTextureObject_t*)));
 }
 
@@ -216,9 +287,14 @@ double OverallRayTracingPerformance = 0.0f;
 float elapsedTime = 0.0f;
 double accumulatedGPUTime = 0.0f;
 
+#ifndef GPULIGHTMASS_ENABLE_CUDA_PROFILING
+#define GPULIGHTMASS_ENABLE_CUDA_PROFILING 0
+#endif
+
 __host__ double rtLaunchFinalGather(int NumSamples)
 {
 	static int NumFinishedTextureMappings = 0;
+	static FinalGatherWorkspace Workspace;
 	int Counter = 0;
 	MortonHash6* cudaMortonHashes;
 
@@ -237,7 +313,9 @@ __host__ double rtLaunchFinalGather(int NumSamples)
 			ComputeAABB << < gridDim, blockDim >> > ();
 		}
 
-		cudaCheck(cudaMalloc((void**)&cudaMortonHashes, LaunchSizeX * LaunchSizeY * sizeof(MortonHash6)));
+		const size_t MortonHashBytes = static_cast<size_t>(LaunchSizeX) * LaunchSizeY * sizeof(MortonHash6);
+		EnsureCudaBuffer(Workspace.cudaMortonHashes, Workspace.MortonHashBytes, MortonHashBytes);
+		cudaMortonHashes = Workspace.cudaMortonHashes;
 
 		{
 			const int Stride = 64;
@@ -249,14 +327,11 @@ __host__ double rtLaunchFinalGather(int NumSamples)
 
 		cudaCheck(cudaMemcpyFromSymbol(&Counter, MappedTexelCounter, 1 * sizeof(int)));
 
-		MortonHash6* ComputedHashes;
-		cudaHostAlloc(&ComputedHashes, Counter * sizeof(MortonHash6), 0);
-
-		cudaCheck(cudaMemcpy(ComputedHashes, cudaMortonHashes, Counter * sizeof(MortonHash6), cudaMemcpyDeviceToHost));
-
-		qsort(ComputedHashes, Counter, sizeof(MortonHash6), compareMortonKey);
-
-		cudaCheck(cudaMemcpy(cudaMortonHashes, ComputedHashes, Counter * sizeof(MortonHash6), cudaMemcpyHostToDevice));
+		thrust::sort(
+			thrust::device,
+			thrust::device_pointer_cast(cudaMortonHashes),
+			thrust::device_pointer_cast(cudaMortonHashes + Counter),
+			MortonHash6Greater());
 	}
 
 	double numTotalRay = 0.0f;
@@ -273,17 +348,21 @@ __host__ double rtLaunchFinalGather(int NumSamples)
 
 	cudaCheck(cudaMemcpyToSymbol(GPUSamplingParameters, &samplingParameters, sizeof(SamplingParameters)));
 
-	float4*	cudaBucketRadiance;
-	int*	cudaBucketSampleRejected;
-	float*	cudaDownsampledBucketImportance;
-	int*	cudaBucketRayStartOffsetInTexel;
-	int*	cudaTexelToRayIDMap;
+	const size_t BucketCount = static_cast<size_t>(samplingParameters.ImageBlockSize) * TotalBucketPerTexel;
+	const size_t DownsampledBucketCount = static_cast<size_t>(samplingParameters.ImageBlockSize) / ImportanceImageFilteringFactor * TotalBucketPerTexel;
+	const size_t TexelToRayIDMapCount = static_cast<size_t>(samplingParameters.ImageBlockSize);
 
-	cudaCheck(cudaMalloc(&cudaBucketRadiance, sizeof(float4) * samplingParameters.ImageBlockSize * TotalBucketPerTexel));
-	cudaCheck(cudaMalloc(&cudaBucketSampleRejected, sizeof(int) * samplingParameters.ImageBlockSize * TotalBucketPerTexel));
-	cudaCheck(cudaMalloc(&cudaDownsampledBucketImportance, sizeof(float) * samplingParameters.ImageBlockSize / ImportanceImageFilteringFactor * TotalBucketPerTexel));
-	cudaCheck(cudaMalloc(&cudaBucketRayStartOffsetInTexel, sizeof(int) * samplingParameters.ImageBlockSize * TotalBucketPerTexel));
-	cudaCheck(cudaMalloc(&cudaTexelToRayIDMap, sizeof(int) * samplingParameters.ImageBlockSize));
+	EnsureCudaBuffer(Workspace.cudaBucketRadiance, Workspace.BucketRadianceBytes, sizeof(float4) * BucketCount);
+	EnsureCudaBuffer(Workspace.cudaBucketSampleRejected, Workspace.BucketSampleRejectedBytes, sizeof(int) * BucketCount);
+	EnsureCudaBuffer(Workspace.cudaDownsampledBucketImportance, Workspace.DownsampledBucketImportanceBytes, sizeof(float) * DownsampledBucketCount);
+	EnsureCudaBuffer(Workspace.cudaBucketRayStartOffsetInTexel, Workspace.BucketRayStartOffsetInTexelBytes, sizeof(int) * BucketCount);
+	EnsureCudaBuffer(Workspace.cudaTexelToRayIDMap, Workspace.TexelToRayIDMapBytes, sizeof(int) * TexelToRayIDMapCount);
+
+	float4* cudaBucketRadiance = Workspace.cudaBucketRadiance;
+	int* cudaBucketSampleRejected = Workspace.cudaBucketSampleRejected;
+	float* cudaDownsampledBucketImportance = Workspace.cudaDownsampledBucketImportance;
+	int* cudaBucketRayStartOffsetInTexel = Workspace.cudaBucketRayStartOffsetInTexel;
+	int* cudaTexelToRayIDMap = Workspace.cudaTexelToRayIDMap;
 
 	cudaCheck(cudaMemcpyToSymbol(BucketRadiance, &cudaBucketRadiance, 1 * sizeof(float4*)));
 	cudaCheck(cudaMemcpyToSymbol(BucketSampleRejected, &cudaBucketSampleRejected, 1 * sizeof(int*)));
@@ -291,12 +370,13 @@ __host__ double rtLaunchFinalGather(int NumSamples)
 	cudaCheck(cudaMemcpyToSymbol(BucketRayStartOffsetInTexel, &cudaBucketRayStartOffsetInTexel, 1 * sizeof(int*)));
 	cudaCheck(cudaMemcpyToSymbol(TexelToRayIDMap, &cudaTexelToRayIDMap, 1 * sizeof(int*)));
 
-	void* cudaRayBuffer;
-	void* cudaRayStartInfoBuffer;
-	void* cudaRayHitResultBuffer;
-	cudaCheck(cudaMalloc(&cudaRayBuffer, sizeof(Ray) * MaxRayBufferSize));
-	cudaCheck(cudaMalloc(&cudaRayStartInfoBuffer, sizeof(RayStartInfo) * MaxRayBufferSize));
-	cudaCheck(cudaMalloc(&cudaRayHitResultBuffer, sizeof(RayResult) * MaxRayBufferSize));
+	EnsureCudaBuffer(Workspace.cudaRayBuffer, Workspace.RayBufferBytes, sizeof(Ray) * MaxRayBufferSize);
+	EnsureCudaBuffer(Workspace.cudaRayStartInfoBuffer, Workspace.RayStartInfoBufferBytes, sizeof(RayStartInfo) * MaxRayBufferSize);
+	EnsureCudaBuffer(Workspace.cudaRayHitResultBuffer, Workspace.RayHitResultBufferBytes, sizeof(RayResult) * MaxRayBufferSize);
+
+	void* cudaRayBuffer = Workspace.cudaRayBuffer;
+	void* cudaRayStartInfoBuffer = Workspace.cudaRayStartInfoBuffer;
+	void* cudaRayHitResultBuffer = Workspace.cudaRayHitResultBuffer;
 	cudaCheck(cudaMemcpyToSymbol(RayBuffer, &cudaRayBuffer, 1 * sizeof(Ray*)));
 	cudaCheck(cudaMemcpyToSymbol(RayStartInfoBuffer, &cudaRayStartInfoBuffer, 1 * sizeof(RayStartInfo*)));
 	cudaCheck(cudaMemcpyToSymbol(RayHitResultBuffer, &cudaRayHitResultBuffer, 1 * sizeof(RayResult*)));
@@ -427,18 +507,6 @@ __host__ double rtLaunchFinalGather(int NumSamples)
 	#endif
 	}
 
-	cudaFree(cudaMortonHashes);
-
-	cudaFree(cudaRayBuffer);
-	cudaFree(cudaRayStartInfoBuffer);
-	cudaFree(cudaRayHitResultBuffer);
-
-	cudaFree(cudaBucketRadiance);
-	cudaFree(cudaBucketSampleRejected);
-	cudaFree(cudaDownsampledBucketImportance);
-	cudaFree(cudaBucketRayStartOffsetInTexel);
-	cudaFree(cudaTexelToRayIDMap);
-
 	NumFinishedTextureMappings++;
 
 	ReportProgressTextureMapping(
@@ -465,7 +533,9 @@ __host__ float rtTimedLaunchRadiosity(int NumBounces, int NumSamplesFirstPass)
 
 	cudaDeviceSynchronize();
 
+#if GPULIGHTMASS_ENABLE_CUDA_PROFILING
 	cudaProfilerStart();
+#endif
 
 	cudaCheck(cudaEventRecord(startEvent, 0));
 
@@ -477,7 +547,9 @@ __host__ float rtTimedLaunchRadiosity(int NumBounces, int NumSamplesFirstPass)
 
 	cudaCheck(cudaEventElapsedTime(&elapsedTime, startEvent, stopEvent));
 
+#if GPULIGHTMASS_ENABLE_CUDA_PROFILING
 	cudaProfilerStop();
+#endif
 
 	cudaDeviceSynchronize();
 
@@ -508,7 +580,9 @@ __host__ float rtTimedLaunch(float& OutMRaysPerSecond, int NumSamples)
 
 	cudaDeviceSynchronize();
 
+#if GPULIGHTMASS_ENABLE_CUDA_PROFILING
 	cudaProfilerStart();
+#endif
 
 	cudaCheck(cudaEventRecord(startEvent, 0));
 
@@ -520,7 +594,9 @@ __host__ float rtTimedLaunch(float& OutMRaysPerSecond, int NumSamples)
 
 	cudaCheck(cudaEventElapsedTime(&elapsedTime, startEvent, stopEvent));
 
+#if GPULIGHTMASS_ENABLE_CUDA_PROFILING
 	cudaProfilerStop();
+#endif
 
 	cudaCheck(cudaMemcpyFromSymbol(&Counter, MappedTexelCounter, 1 * sizeof(int)));
 

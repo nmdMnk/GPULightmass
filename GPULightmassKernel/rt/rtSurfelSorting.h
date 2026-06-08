@@ -133,3 +133,17 @@ __host__ int compareMortonKey(const void* A, const void* B)
 	if (a.Hash[0] != b.Hash[0]) return (a.Hash[0] < b.Hash[0] ? 1 : -1);
 	return 0;
 }
+
+struct MortonHash6Greater
+{
+	__host__ __device__ bool operator()(const MortonHash6& a, const MortonHash6& b) const
+	{
+		if (a.Hash[5] != b.Hash[5]) return a.Hash[5] > b.Hash[5];
+		if (a.Hash[4] != b.Hash[4]) return a.Hash[4] > b.Hash[4];
+		if (a.Hash[3] != b.Hash[3]) return a.Hash[3] > b.Hash[3];
+		if (a.Hash[2] != b.Hash[2]) return a.Hash[2] > b.Hash[2];
+		if (a.Hash[1] != b.Hash[1]) return a.Hash[1] > b.Hash[1];
+		if (a.Hash[0] != b.Hash[0]) return a.Hash[0] > b.Hash[0];
+		return false;
+	}
+};
