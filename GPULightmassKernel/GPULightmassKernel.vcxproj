@@ -73,6 +73,7 @@ copy /Y "$(SolutionDir)External\oneapi-tbb-2023.0.0\redist\intel64\vc14\tbb12.dl
     <CudaCompile>
       <AdditionalCompilerOptions>/wd4819 /wd4267 /wd4996 /Zc:preprocessor</AdditionalCompilerOptions>
       <AdditionalOptions>-std=c++17 -Wno-deprecated-gpu-targets</AdditionalOptions>
+      <CodeGeneration>compute_61,sm_61;compute_75,sm_75;compute_86,sm_86</CodeGeneration>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <FastMath>true</FastMath>
     </CudaCompile>
